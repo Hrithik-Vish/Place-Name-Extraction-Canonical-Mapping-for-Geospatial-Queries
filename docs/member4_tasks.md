@@ -37,14 +37,14 @@ This covers your 3 backend tasks. These sit alongside your primary role in outre
 
 **What:** When Member 3's local GeoNames lookup (Task 7) comes back empty for a name, call Nominatim as a live backup so the pipeline still has a shot at resolving it before giving up.
 
-**Decided approach:** worldwide search, no country restriction. Reasoning: the local GeoNames India data should already cover essentially every real Indian place name, so if something isn't matching locally, it's a fair bet it's genuinely not in India — a global Nominatim search still applies its own fuzzy/typo-tolerant matching on top of that, it's just not biased toward India specifically. This does mean a name that exists both in India and elsewhere could occasionally resolve to the non-Indian version — acceptable known limitation for an MVP, not worth engineering around.
+**Decided approach: India-only search, scoped via `countrycodes=in`.** Reasoning: the system's entire resolution scope is India for v1 — the local GeoNames data is India-specific, and an unscoped Nominatim fallback risks a false-positive match against a same-named place in another country (e.g. a random international "Thane" or "Springfield") with no real signal that it's wrong, which would silently produce a confidently-wrong pin on the map. Scoping Nominatim to India as well keeps the whole pipeline's geographic boundary consistent and honest: a name that fails to resolve under this scoping genuinely isn't a known Indian place, rather than "found abroad, presented as if local." This can be revisited (global scope) post-MVP based on feedback — noted as future scope, not built now.
 
 **Endpoint:** Nominatim's `/search` endpoint.
 
 **Key params:**
 - `q` — the cleaned name string (from Task 6, Member 3's cleanup step)
 - `format=json`
-- No `countrycodes` param (worldwide, per above)
+- `countrycodes=in` — restricts results to India. **This is the changed line from the earlier draft of this doc, which specified worldwide search — that approach is no longer current, see reasoning above.**
 - Set `limit=1` — you just need the best guess, not a full candidate list, to keep this simple for MVP
 
 **Required header:** `User-Agent` — Nominatim requires a descriptive User-Agent identifying the app (e.g. `"ps09-place-resolver/1.0"`). Requests without one may get blocked.
@@ -62,7 +62,7 @@ This covers your 3 backend tasks. These sit alongside your primary role in outre
 
 **Output:** Either one normalized candidate (ready to hand to disambiguation), or nothing (if Nominatim also finds no match or times out — this feeds into Task 13).
 
-**Done when:** Feeding it a name you know isn't in the India dataset (e.g. "Springfield") returns a real candidate from somewhere in the world, and feeding it a nonsense string returns nothing without crashing.
+**Done when:** Feeding it a real Indian place name that's missing from your local GeoNames data (deliberately delete or rename a row for a test, or use one with a spelling GeoNames doesn't have as an alias) returns a real candidate via Nominatim. Feeding it a clearly non-Indian name (e.g. "Springfield") returns **no candidate** — this is now the correct, expected behavior under India-only scoping, not a failure of the fallback. Feeding it a nonsense string also returns nothing, without crashing.
 
 ---
 
@@ -74,7 +74,9 @@ This covers your 3 backend tasks. These sit alongside your primary role in outre
 
 1. **No place names found at all** (contract.md 5.2) — this is mostly Member 3's short-circuit logic (right after his Task 5, spaCy extraction), but worth you double-checking it actually returns the right shape: empty `extracted` array + the `message` field explaining nothing was found.
 
-2. **One name fails to resolve while others succeed** (contract.md 5.3) — this is the one you're most directly responsible for, since it's a direct consequence of your Task 8. When Nominatim also comes back empty or times out, make sure a `"failed"` entry gets constructed correctly: `canonical`, `lat`, `long`, `source` all `null`, `confidence: 0.0`, and a `reason` string that's actually informative (e.g. "No local match found; Nominatim fallback also returned no results" — not just a generic error message).
+2. **One name fails to resolve while others succeed** (contract.md 5.3) — this is the one you're most directly responsible for, since it's a direct consequence of your Task 8. When Nominatim (India-scoped) also comes back empty or times out, make sure a `"failed"` entry gets constructed correctly: `canonical`, `lat`, `long`, `source` all `null`, `confidence: 0.0`, and a `reason` string that's actually informative and honest about the India-only scope — e.g. "No local match found; Nominatim fallback (India-scoped) also returned no results" rather than a generic error message. This matters if a judge deliberately tests a non-Indian place name to probe the system's boundary — the reason string should make the scoping clear, not read like a bug.
+
+**Also worth knowing:** per `backend_build.md` v2, failed entries are never written to `resolved_places` or `raw_name_aliases` — every failure reruns the full pipeline fresh next time, including a fresh Nominatim call. You don't need to do anything differently for this in your Task 8/13 work (the "don't cache" behavior lives in Member 3's Task 10), but worth knowing so you're not surprised if the same failing name takes the same amount of time on a second attempt during the demo.
 
 **Important — this task isn't solo.** Failed entries flow into User's Task 9 (disambiguation) and Task 12 (response assembly) — you're not building this in isolation, you're making sure your piece hands off a clean, correctly-shaped failure to theirs. Worth a quick sync with User once your Task 8 + this error handling is working, to confirm the failed entries look right end-to-end in the real response.
 
@@ -92,10 +94,12 @@ This covers your 3 backend tasks. These sit alongside your primary role in outre
 
 - **GeoNames files are tab-separated**, column order isn't labeled — check GeoNames' documented layout before loading.
 - **Nominatim rate limit:** 1 req/sec, and requires a `User-Agent` header or requests may be blocked.
+- **Nominatim is India-scoped (`countrycodes=in`), not worldwide** — a non-Indian place name will always fail to resolve, by design. Don't "fix" this during testing if you see it happen; it's expected. If a judge asks about it, this is a deliberate, statable product boundary (see Task 8 reasoning above), not a limitation to apologize for.
 - **Timeouts matter more than perfect accuracy for MVP** — a fast, clean "failed" is better than a slow hang.
+- **Failed resolutions are never cached** — the same failing name will take the same amount of time (including the Nominatim round-trip) every time it's submitted, since nothing about a failure gets written to the database. Don't be surprised by this during demo rehearsal.
 
 ---
 
 ## 6. Versioning
 
-**Current version: v1** — first draft, agreed 9 Aug 2026, aligned with `contract.md` v1 and `backend_build.md` v1.
+**Current version: v2** — Task 8 changed from worldwide to India-only Nominatim scoping (`countrycodes=in`). Aligned with `contract.md` v1 (unchanged) and `backend_build.md` v2.
