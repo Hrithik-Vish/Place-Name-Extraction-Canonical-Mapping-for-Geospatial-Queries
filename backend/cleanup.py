@@ -1,31 +1,52 @@
+"""
+Task 6 — rapidfuzz Cleanup (Owner: Member 3 / User)
+Take each raw name from Task 5 and normalize it — strip stray
+punctuation/whitespace, and fuzzy-match against known aliases
+(e.g. historical names like "Bombay" → "Mumbai").
+"""
+
 from rapidfuzz import fuzz, process
 from db import get_supabase
 
+
 def clean_name(raw_name: str) -> str:
-    """Clean place name and match against aliases."""
-    # Basic cleanup
+    """
+    Clean place name:
+    1. Strip punctuation and whitespace
+    2. Fuzzy match against aliases via geonames_alternate_names
+    """
+    # Step 1: Basic cleanup
     cleaned = ''.join(c for c in raw_name if c.isalnum() or c.isspace()).strip()
-    
-    # Fuzzy match against aliases
+
+    # Step 2: Fuzzy match against aliases
     alias = _match_alias(cleaned)
     if alias:
         return alias
-    
+
     return cleaned
 
 
 def _match_alias(name: str) -> str | None:
-    """Fuzzy match against geonames_alternate_names."""
+    """
+    Fuzzy match against geonames_alternate_names.
+    Joins via geoname_id to geonames_places for canonical name.
+    ✅ FIXED: Uses geoname_id to join to geonames_places for canonical name.
+    """
     try:
         supabase = get_supabase()
-        
-        # Get all alternate names
-        result = supabase.table("geonames_alternate_names").select("*").execute()
+
+        # ✅ Query geonames_alternate_names with geoname_id
+        result = supabase.table("geonames_alternate_names") \
+            .select("alternate_name, geoname_id") \
+            .ilike("alternate_name", f"%{name}%") \
+            .limit(20) \
+            .execute()
+
         aliases = result.data
-        
+
         if not aliases:
             return None
-        
+
         # Fuzzy match
         matches = process.extract(
             name,
@@ -33,13 +54,28 @@ def _match_alias(name: str) -> str | None:
             scorer=fuzz.ratio,
             limit=1
         )
-        
+
         if matches and matches[0][1] >= 85:
-            matched = matches[0][0]
+            matched_name = matches[0][0]
+
+            # Find the geoname_id for this match
+            geoname_id = None
             for a in aliases:
-                if a["alternate_name"] == matched:
-                    return a["canonical_name"]
-        
+                if a["alternate_name"] == matched_name:
+                    geoname_id = a["geoname_id"]
+                    break
+
+            if geoname_id:
+                # ✅ Get canonical name from geonames_places
+                place = supabase.table("geonames_places") \
+                    .select("name") \
+                    .eq("geoname_id", geoname_id) \
+                    .single() \
+                    .execute()
+
+                if place.data:
+                    return place.data["name"]
+
         return None
     except Exception as e:
         print(f"Alias match error: {e}")
