@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+spacy
+rapidfuzz
+geopandas
+psycopg2-binary
+supabase
+python-dotenv
+pydantic
+requests
