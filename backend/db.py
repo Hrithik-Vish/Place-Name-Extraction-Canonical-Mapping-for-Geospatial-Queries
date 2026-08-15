@@ -56,7 +56,7 @@ def create_request_items(request_id: str, results: list[dict]) -> None:
     try:
         items = []
         for r in results:
-            # Get or create alias (only if resolved)
+            # Get or create alias
             alias_id = _get_or_create_alias(
                 raw_name=r.get("raw_name"),
                 resolved_place_id=r.get("resolved_place_id")
@@ -77,31 +77,33 @@ def create_request_items(request_id: str, results: list[dict]) -> None:
 
 
 def _get_or_create_alias(raw_name: str, resolved_place_id: str) -> str | None:
-    """Get existing alias or create a new one"""
+    """Get existing alias or create a new one - ✅ FIXED supabase.raw() issue"""
     try:
-        # Only create alias if resolved_place_id exists (NON-NULLABLE)
+        # Only create alias if resolved_place_id exists
         if not resolved_place_id:
             print(f"⚠️ Skipping alias for '{raw_name}' (no resolved_place_id)")
             return None
         
         # Check if alias exists
         result = supabase.table("raw_name_aliases") \
-            .select("id") \
+            .select("id, hit_count") \
             .eq("raw_name", raw_name) \
             .execute()
         
         if result.data and len(result.data) > 0:
-            # Update hit_count and last_seen_at
+            current = result.data[0]
+            # ✅ FIXED: increment in Python, not with supabase.raw()
+            new_count = current.get("hit_count", 0) + 1
             supabase.table("raw_name_aliases") \
                 .update({
-                    "hit_count": supabase.raw("hit_count + 1"),
+                    "hit_count": new_count,
                     "last_seen_at": datetime.utcnow().isoformat()
                 }) \
-                .eq("id", result.data[0]["id"]) \
+                .eq("id", current["id"]) \
                 .execute()
-            return str(result.data[0]["id"])
+            return str(current["id"])
         
-        # Create new alias
+        # Create new alias - ✅ FIXED: removed cleaned_name
         alias_data = {
             "raw_name": raw_name,
             "resolved_place_id": resolved_place_id,
