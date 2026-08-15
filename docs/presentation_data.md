@@ -33,12 +33,26 @@ Disaster/incident reports (news, OSINT, field messages) mention place names in f
 
 2. **Evidence-weighted disambiguation, not population-only guessing.**
    Naive geocoders often just return the largest/most popular place with a given name. Ours treats population as a *prior* (what's statistically likely with zero other evidence) — not the deciding factor. Two other signals outrank it when available:
-   - **Proximity to other places already resolved in the same report** (incident reports naturally cluster place names — "flooding in Thane, spreading to Kalyan" — so a small village near an already-confirmed location is more likely correct than a same-named big city far away).
+   - **Proximity to other places already resolved in the same report** (incident reports naturally cluster place names — "flooding in Thane, spreading to Kalyan" — so a small village near an already-confirmed location is more likely correct than a same-named big city far away). Proximity scoring is full-weight at short range and decays linearly to zero at a **100 km cutoff** — tuned for intra-district/state incident clustering, not cross-country spans.
    - **Explicit regional context in the text** ("...in Raigad district", "...Maharashtra officials said...") — wire-report language states this more reliably than casual text.
-   A population-only guess (no other evidence available) is deliberately confidence-capped, so the system never presents a low-confidence guess as if it were a confirmed match.
+   - **The weighting isn't arbitrary — it's an explicit, tunable formula:** when regional context is present, the composite score is **70% region + 20% proximity + 10% population**; when only proximity evidence is available, it's **60% proximity + 30% population + 10% region**. Evidence always outweighs the population prior by design.
+   - **A population-only guess (no other evidence available) is hard-capped at 0.5 confidence** (`POP_ONLY_CEILING`) — low enough that it can never outscore a genuine evidence-backed candidate, so a correct low-population place (e.g. the actual flooded village) can still beat a high-population same-named decoy. Even after all scoring, population-only picks are capped a second time at **0.6 confidence** — the system never presents a guess as if it were a confirmed match.
+   - **Genuine ambiguity is flagged, not hidden:** when the top two candidates score within **0.05** of each other, confidence is penalized by **−0.1** — the system actively signals "this one needs a second look" instead of reporting false certainty.
 
 3. **Honest, bounded failure — by design, not by accident.**
    The system is deliberately scoped to India only (GeoNames India + India-scoped Nominatim). A non-Indian name like "Springfield" is expected to fail cleanly, with a `reason` string that says so explicitly — this is a stated product boundary, not a bug. One name failing never breaks the rest of the report's resolution (a single bad API call can't take down the whole response).
+
+**Algorithm parameters, as a quick visual callout (good for a stat-box on the slide, like BitRiot's "STATS" block):**
+
+| Parameter | Value | What it means |
+|---|---|---|
+| Population-only confidence ceiling | **≤ 0.5** | A guess with zero supporting evidence can never outscore an evidence-backed match |
+| Population-only final cap | **≤ 0.6** | Even best-case, a population-only pick is flagged as lower-confidence |
+| Ambiguity penalty | **−0.1** | Applied when top 2 candidates score within 0.05 of each other |
+| Proximity scoring radius | **100 km** | Full weight up close, decays to zero beyond this — tuned for state/district-level clustering |
+| Region-evidence weighting | **70% region / 20% proximity / 10% population** | When explicit place/district context is in the text |
+| Proximity-evidence weighting | **60% proximity / 30% population / 10% region** | When no explicit region text, but nearby resolved places exist |
+| Nominatim rate limit | **1 request/sec** | Hard external constraint; mitigated by the two-level cache |
 
 **Target user (important framing point):**
 This is **not** a citizen-facing app. The user is an analyst/operator at a situational-awareness desk — news/OSINT analysts, government disaster-management ops cells — pasting incident reports and needing fast, trustworthy geolocation. This is infrastructure that sits between raw incident text and the map a real decision gets made on, not a standalone consumer product. [Open flag for Member 4/5 — see note at bottom on how hard to lean into this framing vs. giving it a broader "ultimately helps disaster response" halo.]
@@ -131,7 +145,7 @@ For EACH extracted raw_name, individually, IN ORDER:
 **Potential challenges and risks (be upfront — judges reward honesty here over hiding gaps):**
 1. **Ambiguous names without any textual evidence.** If a place name appears with zero proximity or regional context (e.g. the very first name in a report), the system falls back to population-only, deliberately confidence-capped. *Mitigation:* the confidence score itself signals "verify this one" to the analyst — it never silently presents a guess as certain.
 2. **Extraction depends on spaCy correctly recognizing a span as a place at all.** If spaCy misses a badly garbled or unusually formatted name, cleanup/disambiguation never see it. *Mitigation:* named explicitly as a known limitation, not hidden — honest boundary, not a hidden failure mode.
-3. **Nominatim's 1 req/sec rate limit** could slow resolution if many names miss the local gazetteer in a single request. *Mitigation:* the two-level cache means this cost is paid once per unique name, ever — not on every repeat occurrence.
+3. **Nominatim's hard rate limit of 1 request/second** could slow resolution if many names miss the local gazetteer in a single request (e.g. a report with 5 uncached names could take 5+ seconds just on fallback calls). *Mitigation:* the two-level cache means this cost is paid once per unique name, ever — not on every repeat occurrence, so the rate limit's impact shrinks as the system is used more, not grows.
 4. **Failed resolutions are deliberately never cached** (a timeout today isn't necessarily a timeout tomorrow) — a known, named trade-off, not an oversight. Caching failures safely needs a TTL/invalidation strategy, explicitly scoped as future work rather than rushed under deadline pressure.
 
 **Scalability / what changes at higher load** (judges may ask this directly — "what changes at 10,000 users?"):
