@@ -166,11 +166,17 @@ def disambiguate(
     # Only one candidate -> nothing to disambiguate
     if len(candidates) == 1:
         c = candidates[0]
+        if c.source == "nominatim_fallback":
+            reason = "Only match found via India-scoped Nominatim fallback; no local gazetteer entry exists. Treat with caution — verify this is the intended location."
+            confidence = 0.6  # lower trust for a single live-geocoder guess vs. curated local data
+        else:
+            reason = "Only match found in local gazetteer; no disambiguation needed."
+            confidence = 0.9
         return ResolutionResult(
             status="resolved",
             canonical=c.name, lat=c.lat, long=c.long,
-            confidence=0.9, source=c.source,
-            reason="Only match found in local gazetteer; no disambiguation needed.",
+            confidence=confidence, source=c.source,
+            reason=reason,
         )
 
     # Score every candidate on all three signals
