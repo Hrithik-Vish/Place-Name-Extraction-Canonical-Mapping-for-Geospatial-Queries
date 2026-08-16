@@ -1,5 +1,15 @@
-for_claude.py
-test_pipeline.py
+# Environment variables (contains secrets)
 .env
+backend/.env
+
+# Downloaded GeoNames data files (large, don't commit)
+backend/data_loader/data/
+
+# Python
 __pycache__/
+*.pyc
+*.pyo
+
+# Node
 node_modules/
+dist/
