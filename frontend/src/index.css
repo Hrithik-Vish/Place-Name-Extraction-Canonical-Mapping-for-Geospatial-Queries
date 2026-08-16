@@ -1,3 +1,137 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  --bg-main: #f8fafc;
+  --bg-header: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-input: #f8fafc;
+
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+
+  --border-color: #e2e8f0;
+
+  --accent-color: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-shadow: rgba(37, 99, 235, 0.22);
+
+  --blue-soft: #eff6ff;
+  --green-soft: #f0fdf4;
+
+  --sidebar-active: #eff6ff;
+  --icon-bg: #f8fafc;
+  --hover-bg: #f1f5f9;
+
+  --table-header: #f8fafc;
+  --view-bg: #eff6ff;
+  --export-bg: #eff6ff;
+  --tip-bg: #f8fafc;
+
+  --shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 5px 16px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme='dark'] {
+  --bg-main: #0b1120;
+  --bg-header: #111827;
+  --bg-sidebar: #0f172a;
+  --bg-panel: #111827;
+  --bg-input: #0f172a;
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+
+  --border-color: #263244;
+
+  --accent-color: #60a5fa;
+  --accent-hover: #93c5fd;
+  --accent-soft: rgba(96, 165, 250, 0.12);
+  --accent-shadow: rgba(96, 165, 250, 0.18);
+
+  --blue-soft: #172554;
+  --green-soft: #052e16;
+
+  --sidebar-active: #172554;
+  --icon-bg: #172033;
+  --hover-bg: #1e293b;
+
+  --table-header: #0f172a;
+  --view-bg: #172554;
+  --export-bg: #172554;
+  --tip-bg: #0f172a;
+
+  --shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family:
+    Inter,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-color);
+  color: white;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #334155;
+}

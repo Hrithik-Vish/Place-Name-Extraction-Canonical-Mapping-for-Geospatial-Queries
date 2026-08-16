@@ -1,177 +1,433 @@
-import React, { useState, useEffect } from "react";
-import { AlertTriangle, MapPinOff, RotateCcw } from "lucide-react";
-
-import InputForm from "./components/InputForm";
-import SpatialLoader from "./components/SpatialLoader";
+import { useEffect, useMemo, useState } from 'react';
 import {
-  MOCK_SUCCESS_RESPONSE,
-  MOCK_EMPTY_RESPONSE,
-} from "./mocks/mockResponse";
-// Developer toggle: flip to false once the real /resolve endpoint is live.
-// While true, requests never leave the browser — mockResponse.js stands in.
-const USE_MOCK = false;
-const MOCK_DELAY_MS = 2500; // long enough for the SpatialLoader sequence to play out
+  Map,
+  MapPin,
+  CheckCircle2,
+  Database,
+  AlertCircle,
+} from 'lucide-react';
 
-/**
- * appState values:
- *  - "idle":        initial state, form is interactive, nothing resolved yet
- *  - "processing":  request in flight (or mock delay running); loader is showing
- *  - "resolved":    responseData is populated and ready to render
- *  - "error":       request failed; errorMessage is populated
- */
-export default function App() {
-  const [textInput, setTextInput] = useState("");
-  const [appState, setAppState] = useState("idle");
-  const [responseData, setResponseData] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import TextHighlighter from './components/TextHighlighter';
+import ResultsPanel from './components/ResultsPanel';
+import MapView from './components/MapView';
 
-  /**
-   * Resolves place names for the given text, either against the real
-   * backend or the local mock, depending on USE_MOCK. Never throws —
-   * all failure paths land in the "error" appState.
-   */
-  // const resolveText = async (text) => {
+import './App.css';
 
-  //   setTextInput(text);
-  //   setAppState("processing");
-  //   setErrorMessage("");
-  //   setResponseData(null);
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  'http://localhost:8000';
 
-  //   try {
-  //     let data;
+function App() {
+  const [theme, setTheme] = useState('light');
 
-  //     if (USE_MOCK) {
-  //       data = await fetchMockResolution(text);
-  //     } else {
-  //       data = await fetchRealResolution(text);
-  //     }
+  const [extractedPlaces, setExtractedPlaces] =
+    useState([]);
 
-  //     setResponseData(data);
-  //     // appState transitions to "resolved" once SpatialLoader finishes its
-  //     // exit animation and calls onComplete — see below. This keeps the
-  //     // pin-drop/reveal sequence from being cut short by an instant swap.
-  //   } catch (err) {
-  //     console.error("PS-09 /resolve failed:", err);
-  //     setErrorMessage(
-  //       err instanceof Error
-  //         ? err.message
-  //         : "Something went wrong while resolving locations. Please try again.",
-  //     );
-  //     setAppState("error");
-  //   }
-  // };
+  const [responseMessage, setResponseMessage] =
+    useState(null);
 
-  const resolveText = async (text) => {
-    setTextInput(text);
-    setAppState("processing");
-    setErrorMessage("");
-    setResponseData(null);
+  const [isExtracting, setIsExtracting] =
+    useState(false);
+
+  const [apiError, setApiError] = useState('');
+
+  const [selectedPlace, setSelectedPlace] =
+    useState(null);
+
+  const [activeTab, setActiveTab] =
+    useState('Text Analysis');
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-theme',
+      theme
+    );
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((previous) =>
+      previous === 'light'
+        ? 'dark'
+        : 'light'
+    );
+  };
+
+  const handleExtract = async (text) => {
+    const trimmedText = text.trim();
+
+    if (!trimmedText) {
+      return;
+    }
+
+    setIsExtracting(true);
+    setApiError('');
+    setResponseMessage(null);
+    setExtractedPlaces([]);
+    setSelectedPlace(null);
 
     try {
-      let data;
+      const response = await fetch(
+        `${API_BASE_URL}/resolve`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: trimmedText,
+          }),
+        }
+      );
 
-      if (USE_MOCK) {
-        data = await fetchMockResolution(text);
-      } else {
-        data = await fetchRealResolution(text);
+      if (!response.ok) {
+        let errorMessage =
+          'Backend request failed.';
+
+        try {
+          const errorData =
+            await response.json();
+
+          if (errorData?.message) {
+            errorMessage =
+              errorData.message;
+          } else if (errorData?.detail) {
+            errorMessage =
+              errorData.detail;
+          }
+        } catch {
+          // Ignore invalid error JSON
+        }
+
+        throw new Error(errorMessage);
       }
 
-      setResponseData(data);
-      setAppState("resolved"); // <--- ADD THIS LINE HERE
-    } catch (err) {
-      console.error("PS-09 /resolve failed:", err);
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while resolving locations. Please try again.",
+      const data = await response.json();
+
+      if (
+        !data ||
+        typeof data !== 'object'
+      ) {
+        throw new Error(
+          'Invalid response received from backend.'
+        );
+      }
+
+      if (!Array.isArray(data.extracted)) {
+        throw new Error(
+          'Backend response is missing the extracted array.'
+        );
+      }
+
+      const normalizedPlaces =
+        data.extracted.map((place) => ({
+          raw: place.raw ?? '',
+          canonical:
+            place.canonical ?? null,
+          lat:
+            typeof place.lat === 'number'
+              ? place.lat
+              : null,
+          long:
+            typeof place.long === 'number'
+              ? place.long
+              : null,
+          confidence:
+            typeof place.confidence ===
+              'number'
+              ? place.confidence
+              : 0,
+          reason:
+            place.reason ??
+            'No explanation provided.',
+          source:
+            place.source ?? null,
+          status:
+            place.status === 'resolved'
+              ? 'resolved'
+              : 'failed',
+          state:
+            place.state ?? null,
+        }));
+
+      setExtractedPlaces(
+        normalizedPlaces
       );
-      setAppState("error");
+
+      setResponseMessage(
+        data.message ?? null
+      );
+    } catch (error) {
+      console.error(
+        'Extraction error:',
+        error
+      );
+
+      setExtractedPlaces([]);
+      setResponseMessage(null);
+
+      setApiError(
+        error?.message ||
+          'Unable to connect to the backend.'
+      );
+    } finally {
+      setIsExtracting(false);
     }
   };
 
-  /**
-   * Fires once SpatialLoader's exit animation completes. If a response
-   * is already sitting in responseData, we move to "resolved"; if the
-   * fetch itself failed, appState is already "error" and this is a no-op.
-   */
-  const handleLoaderComplete = () => {
-    setAppState((current) => (current === "processing" ? "resolved" : current));
-  };
+  const stats = useMemo(() => {
+    const resolved =
+      extractedPlaces.filter(
+        (place) =>
+          place.status === 'resolved'
+      );
 
-  const handleReset = () => {
-    setTextInput("");
-    setResponseData(null);
-    setErrorMessage("");
-    setAppState("idle");
-  };
+    const highConfidence =
+      resolved.filter(
+        (place) =>
+          typeof place.confidence ===
+            'number' &&
+          place.confidence >= 0.9
+      );
 
-  const hasResults =
-    appState === "resolved" && responseData?.extracted?.length > 0;
-  const isEmptyResult =
-    appState === "resolved" && responseData?.extracted?.length === 0;
+    const states = new Set();
+
+    resolved.forEach((place) => {
+      if (place.state) {
+        states.add(place.state);
+      }
+    });
+
+    return {
+      locations:
+        extractedPlaces.length,
+      highConfidence:
+        highConfidence.length,
+      states: states.size,
+      resolved: resolved.length,
+    };
+  }, [extractedPlaces]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      
+    <div className="app-container">
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
 
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-12 lg:flex-row">
-        {/* Left rail: input form */}
-        <aside className="w-full flex-shrink-0 lg:w-96">
-          <h1 className="mb-1 text-xl font-semibold text-slate-100">
-            Place-Name Extraction &amp; Mapping
-          </h1>
-          <p className="mb-6 text-sm text-slate-400">
-            Paste a sentence or paragraph and we'll extract, disambiguate, and
-            map every place name we find.
-          </p>
+      <div className="main-content">
+        <Header
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
 
-          <InputForm
-            onSubmit={resolveText}
-            isProcessing={appState === "processing"}
-          />
+        <main className="page-content">
+          {activeTab === 'Text Analysis' && (
+            <div className="dashboard-page">
+              <div className="welcome-section">
+                <span className="eyebrow">
+                  <span className="eyebrow-dot" />
+                  ANALYSIS WORKSPACE
+                </span>
 
-          {(appState === "resolved" || appState === "error") && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-400 transition-colors hover:text-slate-200"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Start over
-            </button>
+                <h2>
+                  Transform historical text
+                  into
+                  <span>
+                    {' '}
+                    geospatial intelligence.
+                  </span>
+                </h2>
+
+                <p>
+                  Extract historical place
+                  names, map them to modern
+                  canonical locations, and
+                  understand why each location
+                  was selected.
+                </p>
+              </div>
+
+              {apiError && (
+                <div className="global-error">
+                  <AlertCircle size={18} />
+
+                  <div>
+                    <strong>
+                      Backend connection failed
+                    </strong>
+
+                    <p>{apiError}</p>
+                  </div>
+                </div>
+              )}
+
+              {responseMessage && (
+                <div className="info-message">
+                  <AlertCircle size={18} />
+
+                  <span>
+                    {responseMessage}
+                  </span>
+                </div>
+              )}
+
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon blue">
+                    <MapPin size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Locations Detected
+                    </span>
+
+                    <strong>
+                      {stats.locations}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon green">
+                    <CheckCircle2 size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      High Confidence
+                    </span>
+
+                    <strong>
+                      {stats.highConfidence}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon purple">
+                    <Map size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      States Covered
+                    </span>
+
+                    <strong>
+                      {stats.states}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon orange">
+                    <Database size={20} />
+                  </div>
+
+                  <div>
+                    <span>
+                      Processing Status
+                    </span>
+
+                    <strong className="online-text">
+                      {isExtracting
+                        ? 'Processing'
+                        : 'Ready'}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="dashboard-layout">
+                <div className="analysis-column">
+                  <TextHighlighter
+                    onExtract={handleExtract}
+                    isExtracting={
+                      isExtracting
+                    }
+                  />
+                </div>
+
+                <div className="visual-column">
+                  <div className="map-card">
+                    <div className="map-card-header">
+                      <div>
+                        <h3>
+                          Spatial Visualization
+                        </h3>
+
+                        <p>
+                          Detected locations on
+                          the map
+                        </p>
+                      </div>
+
+                      <div className="map-live-status">
+                        <span />
+                        Live
+                      </div>
+                    </div>
+
+                    <div className="map-card-body">
+                      <MapView
+                        places={
+                          extractedPlaces
+                        }
+                        selectedPlace={
+                          selectedPlace
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="results-full-width">
+                <ResultsPanel
+                  places={
+                    extractedPlaces
+                  }
+                  onPlaceSelect={
+                    setSelectedPlace
+                  }
+                />
+              </div>
+            </div>
           )}
-        </aside>
 
-        {/* Right pane: results / empty / error states */}
-        <main className="flex-1">
-          {appState === "idle" && <IdlePlaceholder />}
+          {activeTab === 'Map View' && (
+            <div className="full-page">
+              <div className="page-heading">
+                <span className="eyebrow">
+                  <span className="eyebrow-dot" />
+                  SPATIAL EXPLORER
+                </span>
 
-          {appState === "error" && (
-            <ErrorBanner
-              message={errorMessage}
-              onRetry={() => resolveText(textInput)}
-            />
-          )}
+                <h2>
+                  Global Map View
+                </h2>
 
-          {isEmptyResult && (
-            <EmptyResultState message={responseData?.message} />
-          )}
+                <p>
+                  Explore all resolved
+                  locations across
+                  geographical space.
+                </p>
+              </div>
 
-          {hasResults && (
-            // Placeholder for the Map Lead's map + results table.
-            // responseData follows the PS-09 contract shape:
-            //   { original_text, message, extracted: [{ raw, status, canonical, lat, long, confidence, reason, source }] }
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-              <h2 className="mb-1 text-sm font-semibold text-slate-200">
-                Map &amp; Results Table
-              </h2>
-              <p className="mb-4 text-xs text-slate-500">
-                Placeholder — the Map Lead will render the map and results table
-                here using the props below.
-              </p>
-              <pre className="max-h-[60vh] overflow-auto rounded-xl bg-slate-950/60 p-4 text-xs text-slate-400">
-                {JSON.stringify(responseData, null, 2)}
-              </pre>
+              <div className="full-map-card">
+                <MapView
+                  places={
+                    extractedPlaces
+                  }
+                  selectedPlace={
+                    selectedPlace
+                  }
+                  fullScreen
+                />
+              </div>
             </div>
           )}
         </main>
@@ -180,92 +436,4 @@ export default function App() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Fetch helpers                                                       */
-/* ------------------------------------------------------------------ */
-
-/**
- * Simulates the network round trip using local mock data. Text
- * containing the word "empty" (case-insensitive) resolves to the empty
- * response, so both edge cases are reachable during development without
- * touching this file.
- */
-function fetchMockResolution(text) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const useEmpty = /\bempty\b/i.test(text);
-      const base = useEmpty ? MOCK_EMPTY_RESPONSE : MOCK_SUCCESS_RESPONSE;
-      resolve({ ...base, original_text: text });
-    }, MOCK_DELAY_MS);
-  });
-}
-
-/** Real backend call, per the PS-09 API Contract. */
-async function fetchRealResolution(text) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
-
-  const response = await fetch(`${baseUrl}/resolve`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Location resolution failed (status ${response.status}). Please try again in a moment.`,
-    );
-  }
-
-  return response.json();
-}
-
-/* ------------------------------------------------------------------ */
-/* Small presentational states                                         */
-/* ------------------------------------------------------------------ */
-
-function IdlePlaceholder() {
-  return (
-    <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 text-center">
-      <p className="max-w-xs text-sm text-slate-500">
-        Results will appear here once you submit some text.
-      </p>
-    </div>
-  );
-}
-
-function EmptyResultState({ message }) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/40 px-6 text-center">
-      <MapPinOff className="mb-4 h-10 w-10 text-slate-600" strokeWidth={1.5} />
-      <h2 className="mb-1 text-base font-semibold text-slate-200">
-        No locations detected
-      </h2>
-      <p className="max-w-sm text-sm text-slate-500">
-        {message ||
-          "We couldn't find any place names in that text. Try adding more context."}
-      </p>
-    </div>
-  );
-}
-
-function ErrorBanner({ message, onRetry }) {
-  return (
-    <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-rose-900/40 bg-rose-950/20 px-6 text-center">
-      <AlertTriangle
-        className="mb-4 h-10 w-10 text-rose-400"
-        strokeWidth={1.5}
-      />
-      <h2 className="mb-1 text-base font-semibold text-rose-200">
-        Something went wrong
-      </h2>
-      <p className="mb-5 max-w-sm text-sm text-rose-300/80">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="rounded-lg bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
-      >
-        Try again
-      </button>
-    </div>
-  );
-}
+export default App;
