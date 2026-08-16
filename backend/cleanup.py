@@ -10,20 +10,14 @@ from db import get_supabase
 
 
 def clean_name(raw_name: str) -> str:
-    """
-    Clean place name:
-    1. Strip punctuation and whitespace
-    2. Fuzzy match against aliases via geonames_alternate_names
-    """
-    # Step 1: Basic cleanup
-    cleaned = ''.join(c for c in raw_name if c.isalnum() or c.isspace()).strip()
-
-    # Step 2: Fuzzy match against aliases
-    alias = _match_alias(cleaned)
+    """Clean place name and match against aliases."""
+    stripped = ''.join(c for c in raw_name if c.isalnum() or c.isspace()).strip()
+    
+    alias = _match_alias(stripped)
     if alias:
-        return alias
-
-    return cleaned
+        return alias.title()
+    
+    return stripped.title()
 
 
 def _match_alias(name: str) -> str | None:
