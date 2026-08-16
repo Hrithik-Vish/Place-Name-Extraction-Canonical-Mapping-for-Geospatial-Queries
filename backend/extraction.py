@@ -2,10 +2,11 @@ import spacy
 from db import get_supabase
 
 try:
-    nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_md")
 except:
-    spacy.cli.download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+    print("⚠️ Downloading spaCy model...")
+    spacy.cli.download("en_core_web_md")
+    nlp = spacy.load("en_core_web_md")
 
 # Small fallback list for common places spaCy might miss
 INDIAN_CITIES = [
