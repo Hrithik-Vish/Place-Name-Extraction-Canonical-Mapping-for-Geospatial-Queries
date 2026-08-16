@@ -18,6 +18,12 @@ Per-name flow (see backend_build.md Section 2):
 
 Order is preserved via resolution_request_items.position_in_text, not
 processing order, per changes.md v2 — response_assembly.py enforces this.
+
+PATCHED (Hrithik, 16 Aug): _resolve_one_name now returns
+resolved_place_id / raw_name_alias_id alongside the contract-shaped result
+so db.py's create_request_items can log real, valid rows instead of always
+receiving None (see cache.py's rewrite for the corresponding fix on the
+write side).
 """
 
 from __future__ import annotations
@@ -125,9 +131,12 @@ def _resolve_one_name(
 ) -> dict:
     """
     Runs the full per-name flow for a single raw_name and returns a
-    contract-shaped result dict. Also appends to resolved_so_far when the
-    name resolves, so later names in the same request get proximity
-    signal from it (per disambiguation.py's resolved_so_far parameter).
+    contract-shaped result dict, PLUS two internal-only keys
+    (resolved_place_id, raw_name_alias_id) that response_assembly.py's
+    build_extracted_item() ignores (it only reads the contract fields) but
+    main.py uses for resolution_request_items logging. Also appends to
+    resolved_so_far when the name resolves, so later names in the same
+    request get proximity signal from it.
     """
 
     # --- Stage 1: fast-path check ---------------------------------------
@@ -141,6 +150,17 @@ def _resolve_one_name(
             "reason": fast_hit["reason"],
             "source": fast_hit["source"],
             "status": "resolved" if fast_hit["canonical"] else "failed",
+            "resolved_place_id": fast_hit.get("resolved_place_id"),
+            # Fast-path hit reuses the EXISTING alias row (this raw_name
+            # was already cached) — nothing new was written, but we still
+            # want create_request_items to log against the existing alias
+            # if we can identify it. get_cached() doesn't currently return
+            # the alias row's own id (only resolved_place_id), so this is
+            # intentionally left unset here; the position is still
+            # correctly reflected in the response itself via
+            # response_assembly's ordering, which does not depend on this
+            # table (see db.py's create_request_items docstring).
+            "raw_name_alias_id": None,
         }
         if result["status"] == "resolved":
             resolved_so_far.append(
@@ -162,9 +182,13 @@ def _resolve_one_name(
             "reason": reuse_hit["reason"],
             "source": reuse_hit["source"],
             "status": "resolved" if reuse_hit["canonical"] else "failed",
+            "resolved_place_id": reuse_hit.get("resolved_place_id"),
+            "raw_name_alias_id": None,
         }
         if result["status"] == "resolved":
-            store_alias_only(raw_name, cleaned_name, reuse_hit["resolved_place_id"])
+            write = store_alias_only(raw_name, cleaned_name, reuse_hit["resolved_place_id"])
+            if write:
+                result["raw_name_alias_id"] = write.get("raw_name_alias_id")
             resolved_so_far.append(
                 ResolvedPlace(name=result["canonical"], lat=result["lat"], long=result["long"])
             )
@@ -181,10 +205,10 @@ def _resolve_one_name(
     else:
         # Nominatim module not wired up yet — degrade to a clean failure
         # rather than crashing the request. See import block at top.
-        candidates = []
-        if not local_candidates:
-            failed = build_failed_entry(raw_name, nominatim_unavailable_reason())
-            return failed
+        failed = build_failed_entry(raw_name, nominatim_unavailable_reason())
+        failed["resolved_place_id"] = None
+        failed["raw_name_alias_id"] = None
+        return failed
 
     disamb_result = disambiguate(
         cleaned_name=cleaned_name,
@@ -193,9 +217,14 @@ def _resolve_one_name(
         original_text=original_text,
     )
     result = _resolution_result_to_dict(disamb_result)
+    result["resolved_place_id"] = None
+    result["raw_name_alias_id"] = None
 
     if result["status"] == "resolved":
-        store_resolved(raw_name, cleaned_name, result)
+        write = store_resolved(raw_name, cleaned_name, result)
+        if write:
+            result["resolved_place_id"] = write.get("resolved_place_id")
+            result["raw_name_alias_id"] = write.get("raw_name_alias_id")
         resolved_so_far.append(
             ResolvedPlace(name=result["canonical"], lat=result["lat"], long=result["long"])
         )
@@ -245,6 +274,7 @@ def resolve(payload: ResolveRequest):
             "raw_name": raw_name,
             "position": position,
             "resolved_place_id": result.get("resolved_place_id"),
+            "raw_name_alias_id": result.get("raw_name_alias_id"),
         })
 
     # --- Log resolution_request_items (best-effort; doesn't block response) -

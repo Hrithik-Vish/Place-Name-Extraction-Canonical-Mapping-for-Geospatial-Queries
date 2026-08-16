@@ -1,37 +1,36 @@
-"""
-Task 7 — Local GeoNames Candidate Lookup (Owner: Member 3 / User)
-Query geonames_places for matches against the cleaned name.
-Can return multiple candidates — disambiguation sorts them out.
-"""
-
 from db import get_supabase
 
-
 def lookup_local(cleaned_name: str) -> list[dict]:
-    """
-    Query geonames_places for candidates.
-    ✅ FIXED: Uses admin1_code/admin2_code to match schema.sql.
-    Returns list of candidate dicts.
+    """Query geonames_places for candidates matching the cleaned name.
+
+    Uses an exact, case-insensitive match (not a substring search) — a
+    substring match on "Thane" would also pull in "Thanesar", "Thanjavur"-
+    adjacent entries, etc., handing disambiguation.py (Task 9) noisy
+    candidates its scoring wasn't designed to filter (it disambiguates
+    between genuine same-named places, not near-spellings — that's
+    cleanup.py/rapidfuzz's job, upstream of this call).
+
+    Column names per schema.sql: admin1_code / admin2_code, not
+    admin1 / admin2.
     """
     try:
         supabase = get_supabase()
 
-        # Search for matches (case-insensitive)
         result = supabase.table("geonames_places") \
             .select("*") \
-            .ilike("name", f"%{cleaned_name}%") \
+            .ilike("name", cleaned_name) \
             .execute()
 
         candidates = []
         for row in result.data:
             candidates.append({
                 "name": row.get("name"),
-                "lat": row.get("latitude"),          # ✅ Matches schema
-                "long": row.get("longitude"),        # ✅ Matches schema
-                "population": row.get("population", 0),
-                "admin1": row.get("admin1_code"),    # ✅ Matches schema
-                "admin2": row.get("admin2_code"),    # ✅ Matches schema
-                "source": "local_geonames"
+                "lat": row.get("latitude"),
+                "long": row.get("longitude"),
+                "population": row.get("population", 0) or 0,
+                "admin1": row.get("admin1_code"),
+                "admin2": row.get("admin2_code"),
+                "source": "local_geonames",
             })
 
         return candidates
@@ -43,5 +42,4 @@ def lookup_local(cleaned_name: str) -> list[dict]:
 
 # Test
 if __name__ == "__main__":
-    print(lookup_local("Thane"))
-    print(lookup_local("XYZ"))
+    print(lookup_local("Thane"))  # Should return candidates (if data exists)
