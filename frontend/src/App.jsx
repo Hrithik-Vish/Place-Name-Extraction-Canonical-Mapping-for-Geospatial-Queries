@@ -30,6 +30,37 @@ export default function App() {
    * backend or the local mock, depending on USE_MOCK. Never throws —
    * all failure paths land in the "error" appState.
    */
+  // const resolveText = async (text) => {
+
+  //   setTextInput(text);
+  //   setAppState("processing");
+  //   setErrorMessage("");
+  //   setResponseData(null);
+
+  //   try {
+  //     let data;
+
+  //     if (USE_MOCK) {
+  //       data = await fetchMockResolution(text);
+  //     } else {
+  //       data = await fetchRealResolution(text);
+  //     }
+
+  //     setResponseData(data);
+  //     // appState transitions to "resolved" once SpatialLoader finishes its
+  //     // exit animation and calls onComplete — see below. This keeps the
+  //     // pin-drop/reveal sequence from being cut short by an instant swap.
+  //   } catch (err) {
+  //     console.error("PS-09 /resolve failed:", err);
+  //     setErrorMessage(
+  //       err instanceof Error
+  //         ? err.message
+  //         : "Something went wrong while resolving locations. Please try again.",
+  //     );
+  //     setAppState("error");
+  //   }
+  // };
+
   const resolveText = async (text) => {
     setTextInput(text);
     setAppState("processing");
@@ -46,9 +77,7 @@ export default function App() {
       }
 
       setResponseData(data);
-      // appState transitions to "resolved" once SpatialLoader finishes its
-      // exit animation and calls onComplete — see below. This keeps the
-      // pin-drop/reveal sequence from being cut short by an instant swap.
+      setAppState("resolved"); // <--- ADD THIS LINE HERE
     } catch (err) {
       console.error("PS-09 /resolve failed:", err);
       setErrorMessage(
@@ -83,11 +112,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <SpatialLoader
-        // Drop isLoading to false as soon as responseData is populated
-        isLoading={appState === "processing" && responseData === null}
-        onComplete={handleLoaderComplete}
-      />
+      
 
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 px-6 py-12 lg:flex-row">
         {/* Left rail: input form */}
