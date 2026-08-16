@@ -1,1 +1,4 @@
 for_claude.py
+test_pipeline.py
+.env
+__pycache__/
