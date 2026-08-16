@@ -33,7 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from extraction import extract_places
-from cleanup import clean_name
+from cleanup import clean_name, get_alias
 from geonames_lookup import lookup_local
 from disambiguation import disambiguate, Candidate, ResolvedPlace
 from cache import get_cached, get_cached_by_cleaned, store_resolved, store_alias_only
@@ -194,8 +194,15 @@ def _resolve_one_name(
             )
         return result
 
-    # --- Stage 4: full pipeline — local lookup, then Nominatim if empty --
+    # --- Stage 4: full pipeline — local lookup, then alias fallback, then Nominatim
     local_candidates = lookup_local(cleaned_name)
+
+    if not local_candidates:
+        # Direct name had no match — try the alias table as a fallback,
+        # not as the default path (see cleanup.py's get_alias docstring).
+        alias_name = get_alias(cleaned_name)
+        if alias_name and alias_name != cleaned_name:
+            local_candidates = lookup_local(alias_name)
 
     if local_candidates:
         candidates = _to_candidates(local_candidates)

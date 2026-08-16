@@ -10,15 +10,18 @@ from db import get_supabase
 
 
 def clean_name(raw_name: str) -> str:
-    """Clean place name and match against aliases."""
-    stripped = ''.join(c for c in raw_name if c.isalnum() or c.isspace()).strip()
-    
-    alias = _match_alias(stripped)
-    if alias:
-        return alias.title()
-    
-    return stripped.title()
+    """Basic cleanup only — no alias substitution here. Alias matching now
+    happens as a fallback in main.py, only if a direct lookup on this name
+    finds no candidates, to avoid a bad alias entry hijacking a name that
+    would have resolved correctly on its own (see: 'Kalyan' incorrectly
+    matching the 'Kalyani Nadi' river's registered alternate name)."""
+    return ''.join(c for c in raw_name if c.isalnum() or c.isspace()).strip().title()
 
+
+def get_alias(name: str) -> str | None:
+    """Exposed separately now — only call this if a direct geonames_places
+    lookup on `name` returns zero candidates."""
+    return _match_alias(name)
 
 def _match_alias(name: str) -> str | None:
     """
