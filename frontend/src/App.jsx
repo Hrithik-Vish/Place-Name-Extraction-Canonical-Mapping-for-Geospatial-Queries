@@ -6,7 +6,7 @@ import SpatialLoader from "./components/SpatialLoader";
 import { MOCK_SUCCESS_RESPONSE, MOCK_EMPTY_RESPONSE } from "./mocks/mockResponse";
 // Developer toggle: flip to false once the real /resolve endpoint is live.
 // While true, requests never leave the browser — mockResponse.js stands in.
-const USE_MOCK = true;
+const USE_MOCK = false;
 const MOCK_DELAY_MS = 2500; // long enough for the SpatialLoader sequence to play out
 
 /**
