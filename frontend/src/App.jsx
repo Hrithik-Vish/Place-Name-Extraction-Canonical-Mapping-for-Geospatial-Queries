@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { AlertTriangle, MapPinOff, RotateCcw } from "lucide-react";
 
 import InputForm from "./components/InputForm";
 import SpatialLoader from "./components/SpatialLoader";
-import { MOCK_SUCCESS_RESPONSE, MOCK_EMPTY_RESPONSE } from "./mocks/mockResponse";
+import {
+  MOCK_SUCCESS_RESPONSE,
+  MOCK_EMPTY_RESPONSE,
+} from "./mocks/mockResponse";
 // Developer toggle: flip to false once the real /resolve endpoint is live.
 // While true, requests never leave the browser — mockResponse.js stands in.
 const USE_MOCK = false;
@@ -51,7 +54,7 @@ export default function App() {
       setErrorMessage(
         err instanceof Error
           ? err.message
-          : "Something went wrong while resolving locations. Please try again."
+          : "Something went wrong while resolving locations. Please try again.",
       );
       setAppState("error");
     }
@@ -73,13 +76,16 @@ export default function App() {
     setAppState("idle");
   };
 
-  const hasResults = appState === "resolved" && responseData?.extracted?.length > 0;
-  const isEmptyResult = appState === "resolved" && responseData?.extracted?.length === 0;
+  const hasResults =
+    appState === "resolved" && responseData?.extracted?.length > 0;
+  const isEmptyResult =
+    appState === "resolved" && responseData?.extracted?.length === 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <SpatialLoader
-        isLoading={appState === "processing"}
+        // Drop isLoading to false as soon as responseData is populated
+        isLoading={appState === "processing" && responseData === null}
         onComplete={handleLoaderComplete}
       />
 
@@ -90,11 +96,14 @@ export default function App() {
             Place-Name Extraction &amp; Mapping
           </h1>
           <p className="mb-6 text-sm text-slate-400">
-            Paste a sentence or paragraph and we'll extract, disambiguate,
-            and map every place name we find.
+            Paste a sentence or paragraph and we'll extract, disambiguate, and
+            map every place name we find.
           </p>
 
-          <InputForm onSubmit={resolveText} isProcessing={appState === "processing"} />
+          <InputForm
+            onSubmit={resolveText}
+            isProcessing={appState === "processing"}
+          />
 
           {(appState === "resolved" || appState === "error") && (
             <button
@@ -113,10 +122,15 @@ export default function App() {
           {appState === "idle" && <IdlePlaceholder />}
 
           {appState === "error" && (
-            <ErrorBanner message={errorMessage} onRetry={() => resolveText(textInput)} />
+            <ErrorBanner
+              message={errorMessage}
+              onRetry={() => resolveText(textInput)}
+            />
           )}
 
-          {isEmptyResult && <EmptyResultState message={responseData?.message} />}
+          {isEmptyResult && (
+            <EmptyResultState message={responseData?.message} />
+          )}
 
           {hasResults && (
             // Placeholder for the Map Lead's map + results table.
@@ -127,8 +141,8 @@ export default function App() {
                 Map &amp; Results Table
               </h2>
               <p className="mb-4 text-xs text-slate-500">
-                Placeholder — the Map Lead will render the map and results
-                table here using the props below.
+                Placeholder — the Map Lead will render the map and results table
+                here using the props below.
               </p>
               <pre className="max-h-[60vh] overflow-auto rounded-xl bg-slate-950/60 p-4 text-xs text-slate-400">
                 {JSON.stringify(responseData, null, 2)}
@@ -173,7 +187,7 @@ async function fetchRealResolution(text) {
 
   if (!response.ok) {
     throw new Error(
-      `Location resolution failed (status ${response.status}). Please try again in a moment.`
+      `Location resolution failed (status ${response.status}). Please try again in a moment.`,
     );
   }
 
@@ -202,7 +216,8 @@ function EmptyResultState({ message }) {
         No locations detected
       </h2>
       <p className="max-w-sm text-sm text-slate-500">
-        {message || "We couldn't find any place names in that text. Try adding more context."}
+        {message ||
+          "We couldn't find any place names in that text. Try adding more context."}
       </p>
     </div>
   );
@@ -211,7 +226,10 @@ function EmptyResultState({ message }) {
 function ErrorBanner({ message, onRetry }) {
   return (
     <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-rose-900/40 bg-rose-950/20 px-6 text-center">
-      <AlertTriangle className="mb-4 h-10 w-10 text-rose-400" strokeWidth={1.5} />
+      <AlertTriangle
+        className="mb-4 h-10 w-10 text-rose-400"
+        strokeWidth={1.5}
+      />
       <h2 className="mb-1 text-base font-semibold text-rose-200">
         Something went wrong
       </h2>
