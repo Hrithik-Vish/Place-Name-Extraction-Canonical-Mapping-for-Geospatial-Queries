@@ -1,99 +1,92 @@
 """
-Task 13 — Error Handling (Owner: Member 4)
+errors.py — Shared failure-entry builder (Task 13 scope, written by Hrithik
+as a shared helper so Task 8/Task 9 call sites can't drift from contract.md).
 
-Helpers that produce the exact response shapes defined in contract.md
-Section 5 for the two edge cases that matter for the demo:
+Purpose: every place in the pipeline that can produce a failed resolution
+(Nominatim fallback coming back empty/timing out, disambiguation finding
+zero candidates at all) should build its "failed" entry through this
+module, not by hand-rolling a dict. That's what guarantees the shape never
+drifts from contract.md Section 5.3, regardless of which module produced
+the failure.
 
-  5.2  No place names found at all → empty extracted[] + message
-  5.3  One name fails to resolve while others succeed → "failed" entry
+Per contract.md:
+    "status": "failed" entries always have canonical/lat/long/source == null,
+    confidence == 0.0, and a `reason` string that is always present and
+    honest about what was tried.
 
-These are building blocks — called by Member 3's Task 10 (cache/storage)
-and User's Task 12 (response assembly) to construct their responses.
-This module does NOT own the HTTP response itself; it produces the
-correctly-shaped dicts that get assembled into the final JSON.
-
-Important: failed entries are never written to resolved_places or
-raw_name_aliases — every failure reruns the full pipeline fresh next time
-(see backend_build.md Known Gotchas).
+Per member4_tasks.md Task 13 + member4_tasks.md Known Gotchas:
+    Nominatim is India-scoped (`countrycodes=in`). A non-Indian name (e.g.
+    "Springfield") is EXPECTED to fail — the reason string should say so
+    explicitly, so it reads as a deliberate product boundary if a judge
+    tests it, not a bug.
 """
 
 from __future__ import annotations
+from typing import Optional
 
 
-# ---------------------------------------------------------------------------
-# contract.md 5.2 — No place names found in valid text
-# ---------------------------------------------------------------------------
+def build_failed_entry(raw_name: str, reason: str) -> dict:
+    """
+    Construct a single contract-shaped failed entry for one raw name.
 
-def build_no_places_response(original_text: str) -> dict:
-    """Short-circuit response when spaCy extraction returns zero location
-    entities. This skips cleanup, candidate generation, disambiguation,
-    and caching entirely — there's nothing to process.
+    Use this from:
+      - nominatim_fallback.py, when Nominatim also returns nothing / times out
+      - disambiguation.py, when candidates list is empty (Task 7 + Task 8
+        both came back empty)
 
-    Returns the exact shape from contract.md Section 5.2:
-        {
-            "original_text": "...",
-            "extracted": [],
-            "message": "No locations found in the provided text."
-        }
-
-    HTTP status is 200 — this is not an error, it's a valid outcome.
+    Does NOT include `raw` — response_assembly.py attaches `raw` (and
+    resolves position ordering) when it builds the final extracted[] item,
+    so this stays reusable regardless of where in the pipeline it's called.
     """
     return {
-        "original_text": original_text,
-        "extracted": [],
-        "message": "No locations found in the provided text.",
-    }
-
-
-# ---------------------------------------------------------------------------
-# contract.md 5.3 — Partial failure (one name fails, others may succeed)
-# ---------------------------------------------------------------------------
-
-# Default reason strings — India-scope-aware and informative, as required
-# by member4_tasks.md Task 13. These should make the scoping clear to a
-# judge who deliberately tests a non-Indian place name, not read like a bug.
-
-REASON_NO_MATCH = (
-    "No local match found; Nominatim fallback (India-scoped) "
-    "also returned no results."
-)
-
-REASON_TIMEOUT = (
-    "No local match found; Nominatim fallback (India-scoped) "
-    "request timed out."
-)
-
-
-def build_failed_entry(raw_name: str, reason: str | None = None) -> dict:
-    """Construct a single "failed" extracted item for a name that could
-    not be resolved by either local GeoNames or Nominatim fallback.
-
-    Returns the exact shape from contract.md Section 5.3:
-        {
-            "raw": "Springfield",
-            "canonical": null,
-            "lat": null,
-            "long": null,
-            "confidence": 0.0,
-            "reason": "No local match found; Nominatim fallback ...",
-            "source": null,
-            "status": "failed"
-        }
-
-    Args:
-        raw_name: The exact text span spaCy extracted (before cleanup).
-        reason:   Optional override for the reason string. If not provided,
-                  defaults to REASON_NO_MATCH which explains India-only
-                  scoping. Use REASON_TIMEOUT if the Nominatim call
-                  specifically timed out.
-    """
-    return {
-        "raw": raw_name,
         "canonical": None,
         "lat": None,
         "long": None,
         "confidence": 0.0,
-        "reason": reason if reason is not None else REASON_NO_MATCH,
+        "reason": reason,
         "source": None,
         "status": "failed",
     }
+
+
+def no_local_and_no_nominatim_reason() -> str:
+    """
+    Standard reason string for the common case: no GeoNames match, and the
+    India-scoped Nominatim fallback also found nothing. Centralized so the
+    "India-scoped" language stays consistent across call sites — this is
+    the exact case a judge testing "Springfield" will trigger, and the
+    wording needs to read as a stated boundary, not an error.
+    """
+    return (
+        "No local gazetteer match found; India-scoped Nominatim fallback "
+        "also returned no results."
+    )
+
+
+def nominatim_timeout_reason() -> str:
+    """Reason string for when Nominatim was reached but didn't respond in
+    time. Distinguished from a clean 'no results' response since it's a
+    different failure mode (network/latency, not 'this isn't a known
+    Indian place')."""
+    return (
+        "No local gazetteer match found; India-scoped Nominatim fallback "
+        "request timed out."
+    )
+
+
+def nominatim_unavailable_reason() -> str:
+    """Reason string for when nominatim_fallback.py itself isn't wired up
+    yet (import failure) — lets main.py degrade gracefully during parallel
+    development instead of crashing the whole /resolve call. Should not
+    appear in the final demo build once Task 8 is complete."""
+    return (
+        "No local gazetteer match found; Nominatim fallback is not yet "
+        "available in this build."
+    )
+
+
+def extraction_empty_message() -> str:
+    """Top-level `message` field for contract.md Section 5.2 — zero place
+    names found by spaCy. This is NOT a per-entry reason, it's the
+    top-level response `message`."""
+    return "No locations found in the provided text."
