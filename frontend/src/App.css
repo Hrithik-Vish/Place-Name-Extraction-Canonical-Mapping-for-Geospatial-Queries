@@ -686,9 +686,7 @@ html[data-theme='light'].theme-transitioning::after {
 
 .panel-card,
 .map-card,
-.full-map-card,
-.history-card,
-.history-empty {
+.full-map-card {
   background: var(--bg-panel);
 
   border: 1px solid var(--border-color);
@@ -811,11 +809,6 @@ html[data-theme='light'].theme-transitioning::after {
   position: relative;
 }
 
-.analysis-input-wrapper.is-scanning {
-  overflow: hidden;
-  border-radius: 9px;
-}
-
 .analysis-textarea {
   width: 100%;
   min-height: 250px;
@@ -911,122 +904,6 @@ html[data-theme='light'].theme-transitioning::after {
 .extract-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-
-/* =========================================================
-   SCAN ANIMATION
-========================================================= */
-
-.analysis-input-wrapper.is-scanning
-.analysis-textarea {
-  border-color: var(--accent-color);
-
-  box-shadow:
-    0 0 0 3px
-    var(--accent-soft),
-    0 0 25px
-    var(--accent-shadow);
-}
-
-.scan-line {
-  position: absolute;
-
-  left: 0;
-  right: 0;
-  top: 0;
-
-  height: 2px;
-
-  z-index: 5;
-
-  pointer-events: none;
-
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      var(--accent-color),
-      transparent
-    );
-
-  box-shadow:
-    0 0 12px
-    var(--accent-color);
-
-  animation:
-    scanningLine
-    1.5s
-    ease-in-out
-    infinite;
-}
-
-@keyframes scanningLine {
-  0% {
-    top: 3%;
-    opacity: 0;
-  }
-
-  12% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 1;
-  }
-
-  88% {
-    opacity: 1;
-  }
-
-  100% {
-    top: 97%;
-    opacity: 0;
-  }
-}
-
-.scan-status {
-  position: absolute;
-
-  right: 12px;
-  bottom: 12px;
-
-  z-index: 6;
-
-  display: flex;
-  align-items: center;
-  gap: 6px;
-
-  padding: 6px 9px;
-
-  border-radius: 7px;
-
-  background:
-    rgba(15, 23, 42, 0.88);
-
-  color: white;
-
-  font-size: 0.62rem;
-  font-weight: 700;
-
-  backdrop-filter: blur(8px);
-
-  animation:
-    scanStatusIn
-    0.3s
-    ease;
-}
-
-@keyframes scanStatusIn {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 
@@ -1947,6 +1824,15 @@ html[data-theme='light'].theme-transitioning::after {
 ========================================================= */
 
 .historical-name span {
+  color: var(--text-main);
+}
+
+/* Only resolved rows get the red-strikethrough treatment — it reads as
+   "historical name superseded by the canonical name on this row," which
+   only makes sense once there IS a canonical replacement shown next to
+   it. Applying it to failed rows too (previously unconditional) made
+   every raw name look "wrong" even when it had successfully resolved. */
+.historical-name span.is-superseded {
   color: #ef4444;
 
   text-decoration: line-through;
@@ -2297,14 +2183,6 @@ html[data-theme='light'].theme-transitioning::after {
   color: var(--text-main);
 }
 
-.meta-success {
-  color: #16a34a !important;
-}
-
-.meta-failed {
-  color: #dc2626 !important;
-}
-
 @keyframes reasonReveal {
   from {
     opacity: 0;
@@ -2390,153 +2268,6 @@ html[data-theme='light'].theme-transitioning::after {
 
 
 /* =========================================================
-   HISTORY
-========================================================= */
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.history-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-
-  padding: 17px;
-
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.25s ease,
-    background-color 0.35s ease;
-}
-
-.history-card:hover {
-  transform: translateY(-2px);
-
-  box-shadow:
-    0 10px 24px
-    rgba(15, 23, 42, 0.08);
-}
-
-[data-theme='dark'] .history-card:hover {
-  box-shadow:
-    0 10px 24px
-    rgba(0, 0, 0, 0.24);
-}
-
-.history-icon {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 9px;
-
-  background: var(--blue-soft);
-  color: var(--accent-color);
-}
-
-.history-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.history-content h3 {
-  color: var(--text-main);
-
-  font-size: 0.85rem;
-}
-
-.history-content p {
-  margin-top: 4px;
-
-  color: var(--text-muted);
-
-  font-size: 0.7rem;
-  line-height: 1.5;
-}
-
-.history-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-
-  margin-top: 8px;
-
-  color: var(--text-muted);
-
-  font-size: 0.63rem;
-}
-
-.success-label {
-  color: #16a34a;
-}
-
-.history-action {
-  padding: 7px 12px;
-
-  border-radius: 7px;
-
-  background: var(--view-bg);
-  color: var(--accent-color);
-
-  font-size: 0.68rem;
-}
-
-.history-action:hover {
-  background: var(--accent-color);
-  color: white;
-}
-
-.history-empty {
-  max-width: 650px;
-
-  padding: 45px 25px;
-
-  text-align: center;
-}
-
-.history-empty-icon {
-  width: 50px;
-  height: 50px;
-
-  margin:
-    0 auto 12px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 50%;
-
-  background: var(--blue-soft);
-  color: var(--accent-color);
-}
-
-.history-empty h3 {
-  color: var(--text-main);
-  font-size: 0.9rem;
-}
-
-.history-empty p {
-  max-width: 430px;
-
-  margin:
-    7px auto 0;
-
-  color: var(--text-muted);
-
-  font-size: 0.7rem;
-  line-height: 1.5;
-}
-
-
-/* =========================================================
    GLOBAL SMOOTH TRANSITIONS
 ========================================================= */
 
@@ -2548,8 +2279,6 @@ body,
 .map-card,
 .full-map-card,
 .stat-card,
-.history-card,
-.history-empty,
 .theme-button,
 .search-box,
 .filter-box,
@@ -2579,6 +2308,206 @@ body,
   to {
     transform: rotate(360deg);
   }
+}
+
+
+/* =========================================================
+   RESOLVE LOADER
+   Active-waiting-window animation shown in place of the
+   textarea while a /resolve request is in flight. Scoped to
+   the analysis panel (not a full-page overlay) so the
+   sidebar/header/stat cards stay visible, matching how
+   isExtracting already behaves elsewhere in this app.
+========================================================= */
+
+.resolve-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+
+  min-height: 250px;
+
+  padding: 24px;
+
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+
+  background: var(--bg-input);
+
+  opacity: 1;
+  transform: scale(1);
+
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+
+.resolve-loader.is-exiting {
+  opacity: 0;
+  transform: scale(1.03);
+}
+
+.resolve-loader-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resolve-loader-rings {
+  position: relative;
+
+  width: 108px;
+  height: 108px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resolve-loader-ring {
+  position: absolute;
+  inset: 0;
+
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+
+  animation:
+    resolveRingPulse
+    2.4s
+    ease-in-out
+    infinite;
+}
+
+.resolve-loader-ring:nth-child(2) {
+  inset: 18px;
+  animation-delay: 0.25s;
+}
+
+.resolve-loader-ring:nth-child(3) {
+  inset: 36px;
+  animation-delay: 0.5s;
+}
+
+.resolve-loader-rings.is-settled .resolve-loader-ring {
+  animation: none;
+  opacity: 0.35;
+  border-color: var(--border-color);
+}
+
+@keyframes resolveRingPulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    border-color: var(--border-color);
+  }
+
+  50% {
+    opacity: 1;
+    border-color: var(--accent-color);
+  }
+}
+
+.resolve-loader-sweep {
+  position: absolute;
+  inset: 0;
+
+  border-radius: 50%;
+
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 260deg,
+    var(--accent-soft) 320deg,
+    var(--accent-color) 360deg
+  );
+
+  -webkit-mask-image: radial-gradient(
+    circle,
+    transparent 62%,
+    black 63%
+  );
+  mask-image: radial-gradient(
+    circle,
+    transparent 62%,
+    black 63%
+  );
+
+  opacity: 0.85;
+
+  animation:
+    resolveSweepSpin
+    1.8s
+    linear
+    infinite;
+}
+
+.resolve-loader-rings.is-settled .resolve-loader-sweep {
+  animation-play-state: paused;
+  opacity: 0;
+
+  transition: opacity 0.3s ease;
+}
+
+@keyframes resolveSweepSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.resolve-loader-icon {
+  position: relative;
+  z-index: 2;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+
+  border-radius: 50%;
+
+  background: var(--bg-panel);
+  color: var(--accent-color);
+
+  box-shadow: 0 0 0 1px var(--border-color);
+}
+
+.resolve-loader-pin {
+  animation:
+    resolvePinDrop
+    0.6s
+    cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes resolvePinDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.7);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.resolve-loader-text {
+  min-height: 1.2em;
+
+  color: var(--text-muted);
+
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+
+  text-align: center;
 }
 
 
@@ -2732,14 +2661,6 @@ body,
 
   .reason-expanded-content > p {
     font-size: 0.72rem;
-  }
-
-  .history-card {
-    align-items: flex-start;
-  }
-
-  .history-action {
-    display: none;
   }
 
   .table-container {

@@ -38,6 +38,14 @@ const ResultsPanel = ({
     return ['All', ...uniqueStates];
   }, [places]);
 
+  // The connected backend doesn't currently send a `state` field per
+  // contract.md, so `states` is always just ['All'] in practice. A
+  // dropdown offering a single option that can never change anything is
+  // dead UI, not a real filter — hide it until there's genuinely more
+  // than one state to choose between. Filtering logic below is untouched
+  // and stays correct either way (filterState === 'All' always matches).
+  const hasStateFilterOptions = states.length > 1;
+
   const filteredPlaces = useMemo(() => {
     const search = searchTerm.toLowerCase().trim();
 
@@ -282,27 +290,29 @@ const ResultsPanel = ({
           />
         </div>
 
-        <div className="filter-box">
-          <SlidersHorizontal size={16} />
+        {hasStateFilterOptions && (
+          <div className="filter-box">
+            <SlidersHorizontal size={16} />
 
-          <select
-            value={filterState}
-            onChange={(event) =>
-              setFilterState(event.target.value)
-            }
-          >
-            {states.map((state) => (
-              <option
-                key={state}
-                value={state}
-              >
-                {state === 'All'
-                  ? 'All States'
-                  : state}
-              </option>
-            ))}
-          </select>
-        </div>
+            <select
+              value={filterState}
+              onChange={(event) =>
+                setFilterState(event.target.value)
+              }
+            >
+              {states.map((state) => (
+                <option
+                  key={state}
+                  value={state}
+                >
+                  {state === 'All'
+                    ? 'All States'
+                    : state}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {places.length > 0 && (
@@ -428,7 +438,13 @@ const FragmentRow = ({
       >
         <td>
           <div className="historical-name">
-            <span>
+            <span
+              className={
+                isResolved
+                  ? 'is-superseded'
+                  : ''
+              }
+            >
               {place.raw || 'Unknown'}
             </span>
           </div>

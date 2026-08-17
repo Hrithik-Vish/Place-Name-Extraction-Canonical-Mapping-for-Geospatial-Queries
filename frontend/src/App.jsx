@@ -13,11 +13,45 @@ import TextHighlighter from './components/TextHighlighter';
 import ResultsPanel from './components/ResultsPanel';
 import MapView from './components/MapView';
 
+import {
+  MOCK_SUCCESS_RESPONSE,
+  MOCK_EMPTY_RESPONSE,
+} from './mocks/mockResponse';
+
 import './App.css';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   'http://localhost:8000';
+
+// Dev-only offline toggle. When true, /resolve is never actually called —
+// a fixture matching contract.md is returned instead after a short
+// simulated delay, so the full UI (including the loading animation) can
+// be seen and tested without the backend running.
+//
+// Defaults to FALSE — this build talks to the real backend at
+// API_BASE_URL (see the fetch call in the try block below). Set
+// VITE_API_BASE_URL in .env (see .env.example) if the backend isn't on
+// localhost:8000. Flip this back to true only for offline UI/animation
+// development when no backend is running.
+const USE_MOCK = false;
+const MOCK_DELAY_MS = 2200;
+
+// Text containing the whole word "empty" routes to the zero-results
+// fixture instead of the success one, so both edge cases in contract.md
+// Section 5 are reachable via USE_MOCK without touching this file again.
+function resolveMock(text) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const useEmpty = /\bempty\b/i.test(text);
+      const base = useEmpty
+        ? MOCK_EMPTY_RESPONSE
+        : MOCK_SUCCESS_RESPONSE;
+
+      resolve({ ...base, original_text: text });
+    }, MOCK_DELAY_MS);
+  });
+}
 
 function App() {
   const [theme, setTheme] = useState('light');
@@ -68,42 +102,69 @@ function App() {
     setSelectedPlace(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/resolve`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: trimmedText,
-          }),
-        }
-      );
+      let data;
 
-      if (!response.ok) {
-        let errorMessage =
-          'Backend request failed.';
-
-        try {
-          const errorData =
-            await response.json();
-
-          if (errorData?.message) {
-            errorMessage =
-              errorData.message;
-          } else if (errorData?.detail) {
-            errorMessage =
-              errorData.detail;
+      if (USE_MOCK) {
+        data = await resolveMock(trimmedText);
+      } else {
+        const response = await fetch(
+          `${API_BASE_URL}/resolve`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text: trimmedText,
+            }),
           }
-        } catch {
-          // Ignore invalid error JSON
+        );
+
+        if (!response.ok) {
+          let errorMessage =
+            'Backend request failed.';
+
+          try {
+            const errorData =
+              await response.json();
+
+            if (
+              errorData?.message &&
+              typeof errorData.message === 'string'
+            ) {
+              errorMessage =
+                errorData.message;
+            } else if (
+              typeof errorData?.detail === 'string'
+            ) {
+              // FastAPI's own HTTPException(detail="...") shape.
+              errorMessage =
+                errorData.detail;
+            } else if (
+              Array.isArray(errorData?.detail) &&
+              errorData.detail.length > 0
+            ) {
+              // FastAPI/Pydantic's automatic request-validation shape —
+              // detail is a list of {loc, msg, type} objects, not a
+              // string. Surface the first message rather than stringify
+              // the whole array (which renders as "[object Object]").
+              const [firstIssue] = errorData.detail;
+
+              errorMessage =
+                firstIssue?.msg &&
+                typeof firstIssue.msg === 'string'
+                  ? firstIssue.msg
+                  : errorMessage;
+            }
+          } catch {
+            // Ignore invalid error JSON
+          }
+
+          throw new Error(errorMessage);
         }
 
-        throw new Error(errorMessage);
+        data = await response.json();
       }
-
-      const data = await response.json();
 
       if (
         !data ||
@@ -199,12 +260,25 @@ function App() {
       }
     });
 
+    // contract.md's extracted[] items don't currently include a `state`
+    // field — every place normalized in handleExtract carries state: null
+    // against the real backend today. hasStateData distinguishes "the
+    // backend sent state, and this text genuinely resolved to zero
+    // distinct states" (states.size === 0 but hasStateData is true) from
+    // "the backend doesn't send state data at all" (nothing to count).
+    // Only the first case should ever render as a real "0". See the
+    // States Covered stat card below.
+    const hasStateData = extractedPlaces.some(
+      (place) => Boolean(place.state)
+    );
+
     return {
       locations:
         extractedPlaces.length,
       highConfidence:
         highConfidence.length,
       states: states.size,
+      hasStateData,
       resolved: resolved.length,
     };
   }, [extractedPlaces]);
@@ -306,7 +380,14 @@ function App() {
                   </div>
                 </div>
 
-                <div className="stat-card">
+                <div
+                  className="stat-card"
+                  title={
+                    stats.hasStateData
+                      ? undefined
+                      : 'State data is not provided by the connected backend yet.'
+                  }
+                >
                   <div className="stat-icon purple">
                     <Map size={20} />
                   </div>
@@ -317,7 +398,9 @@ function App() {
                     </span>
 
                     <strong>
-                      {stats.states}
+                      {stats.hasStateData
+                        ? stats.states
+                        : '—'}
                     </strong>
                   </div>
                 </div>

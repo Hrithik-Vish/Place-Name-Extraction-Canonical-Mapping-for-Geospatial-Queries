@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Loader2,
   Sparkles,
   FileText,
   AlertCircle,
 } from 'lucide-react';
+
+import ResolveLoader from './ResolveLoader';
 
 const TextHighlighter = ({
   onExtract,
@@ -15,6 +17,27 @@ const TextHighlighter = ({
 
   const [validationError, setValidationError] =
     useState('');
+
+  // Decoupled from isExtracting on purpose. isExtracting flips to false the
+  // instant the request settles, but ResolveLoader still has its own
+  // settle -> hold -> fade-out sequence left to play. If the textarea swap
+  // (and the extract button's disabled/label state) were driven directly
+  // off isExtracting, the loader would get yanked out mid-animation the
+  // moment data arrives instead of finishing its exit. showLoader stays
+  // true until ResolveLoader itself reports (via onSettled) that its exit
+  // transition has actually completed, so the swap-back only happens once
+  // there's nothing left on screen to interrupt.
+  const [showLoader, setShowLoader] = useState(isExtracting);
+
+  useEffect(() => {
+    if (isExtracting) {
+      setShowLoader(true);
+    }
+  }, [isExtracting]);
+
+  const handleLoaderSettled = () => {
+    setShowLoader(false);
+  };
 
   const handleClear = () => {
     setInputText('');
@@ -77,7 +100,7 @@ const TextHighlighter = ({
             type="button"
             onClick={handleClear}
             disabled={
-              isExtracting
+              showLoader
             }
           >
             Clear
@@ -85,41 +108,24 @@ const TextHighlighter = ({
         </div>
       </div>
 
-      <div
-        className={`analysis-input-wrapper ${
-          isExtracting
-            ? 'is-scanning'
-            : ''
-        }`}
-      >
-        <textarea
-          className={`analysis-textarea ${
-            validationError
-              ? 'input-error'
-              : ''
-          }`}
-          value={inputText}
-          onChange={handleChange}
-          placeholder="Paste historical documents, archival text, letters or other content here..."
-          disabled={isExtracting}
-        />
-
-        {isExtracting && (
-          <>
-            <div className="scan-line" />
-
-            <div className="scan-status">
-              <Loader2
-                size={15}
-                className="animate-spin"
-              />
-
-              <span>
-                AI is scanning the
-                document...
-              </span>
-            </div>
-          </>
+      <div className="analysis-input-wrapper">
+        {showLoader ? (
+          <ResolveLoader
+            isLoading={isExtracting}
+            onSettled={handleLoaderSettled}
+          />
+        ) : (
+          <textarea
+            className={`analysis-textarea ${
+              validationError
+                ? 'input-error'
+                : ''
+            }`}
+            value={inputText}
+            onChange={handleChange}
+            placeholder="Paste historical documents, archival text, letters or other content here..."
+            disabled={isExtracting}
+          />
         )}
       </div>
 
@@ -146,9 +152,9 @@ const TextHighlighter = ({
       <button
         className="extract-button"
         onClick={handleSubmit}
-        disabled={isExtracting}
+        disabled={showLoader}
       >
-        {isExtracting ? (
+        {showLoader ? (
           <>
             <Loader2
               size={18}

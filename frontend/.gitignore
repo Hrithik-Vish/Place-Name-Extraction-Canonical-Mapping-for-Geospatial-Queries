@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Environment variables — .env.example is the template and stays tracked;
+# actual .env files are local-only (see .env.example's instructions).
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
