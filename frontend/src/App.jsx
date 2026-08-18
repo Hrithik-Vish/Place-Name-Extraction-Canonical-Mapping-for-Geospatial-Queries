@@ -306,7 +306,7 @@ function App() {
                 </span>
 
                 <h2>
-                  Transform historical text
+                  Transform ANY text
                   into
                   <span>
                     {' '}
@@ -315,7 +315,7 @@ function App() {
                 </h2>
 
                 <p>
-                  Extract historical place
+                  Extract current place
                   names, map them to modern
                   canonical locations, and
                   understand why each location
