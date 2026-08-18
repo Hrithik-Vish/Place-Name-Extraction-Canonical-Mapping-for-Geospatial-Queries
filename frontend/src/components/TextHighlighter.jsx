@@ -84,7 +84,7 @@ const TextHighlighter = ({
           </h2>
 
           <p>
-            Extract historical place
+            Extract Report place
             names automatically
           </p>
         </div>

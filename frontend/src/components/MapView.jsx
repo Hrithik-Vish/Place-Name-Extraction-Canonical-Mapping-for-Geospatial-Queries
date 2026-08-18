@@ -318,7 +318,7 @@ const MapView = ({
                   </h3>
 
                   <p className="popup-original">
-                    Historical name:{' '}
+                    Input name:{' '}
                     {place.raw ||
                       'Not available'}
                   </p>

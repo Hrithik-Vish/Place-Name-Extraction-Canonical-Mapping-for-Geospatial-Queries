@@ -339,7 +339,7 @@ const ResultsPanel = ({
         <table className="results-table">
           <thead>
             <tr>
-              <th>Historical Name</th>
+              <th>Input Name</th>
               <th>Canonical Name</th>
               <th>Location</th>
               <th>Confidence</th>
